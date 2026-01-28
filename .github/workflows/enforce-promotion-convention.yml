@@ -1,0 +1,114 @@
+name: Enforce Promotion Branch Convention
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enforce-promotion-convention:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check promotion branch convention
+        id: check_convention
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+          
+          echo "Source branch: $SOURCE_BRANCH"
+          echo "Target branch: $TARGET_BRANCH"
+          
+          # Check if source branch follows promotion__*__* convention
+          if [[ "$SOURCE_BRANCH" =~ ^promotion__.*__.*$ ]]; then
+            echo "Source branch follows promotion convention. No action needed."
+            echo "is_promotion=true" >> $GITHUB_OUTPUT
+          else
+            echo "Source branch does NOT follow promotion convention."
+            echo "is_promotion=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create promotion branch and new PR
+        if: steps.check_convention.outputs.is_promotion == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          
+          echo "Creating promotion branch and PR..."
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch latest changes
+          git fetch origin "$SOURCE_BRANCH"
+          git fetch origin "$TARGET_BRANCH"
+          
+          # Create new promotion branch name
+          PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${TARGET_BRANCH}"
+          
+          echo "New promotion branch: $PROMOTION_BRANCH"
+          
+          # Create and push promotion branch
+          git checkout -b "$PROMOTION_BRANCH" "origin/$SOURCE_BRANCH"
+          git push origin "$PROMOTION_BRANCH"
+          
+          echo "Promotion branch created and pushed"
+          
+          # Create new PR using GitHub CLI
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$PROMOTION_BRANCH" \
+            --title "[rHelay] $SOURCE_BRANCH → $TARGET_BRANCH" \
+            --body "Automated promotion branch created by rHelay.
+
+# This PR follows the promotion branch naming convention.
+
+# **Source Branch:** \`$SOURCE_BRANCH\`
+# **Target Branch:** \`$TARGET_BRANCH\`
+# **Promotion Branch:** \`$PROMOTION_BRANCH\`"
+          
+#           echo "New PR created for promotion branch"
+
+#       - name: Close original PR with comment
+#         if: steps.check_convention.outputs.is_promotion == 'false'
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           PR_NUMBER: ${{ github.event.pull_request.number }}
+#           SOURCE_BRANCH: ${{ github.head_ref }}
+#           TARGET_BRANCH: ${{ github.base_ref }}
+#         run: |
+#           PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${TARGET_BRANCH}"
+          
+#           # Add comment explaining the closure
+#           gh pr comment "$PR_NUMBER" \
+#             --body "🤖 **Automatically closed by rHelay**
+
+# This PR was opened directly from a feature branch instead of a promotion branch. rHelay has automatically:
+# 1. Created a new promotion branch: \`$PROMOTION_BRANCH\`
+# 2. Created a new PR from the promotion branch to \`$TARGET_BRANCH\`
+
+# Please use the new PR instead. The promotion branch naming convention ensures proper pipeline flow.
+
+# **New Promotion Branch:** \`$PROMOTION_BRANCH\`"
+          
+#           # Close the PR
+#           gh pr close "$PR_NUMBER"
+          
+#           echo "Original PR closed with comment"
