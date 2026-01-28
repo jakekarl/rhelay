@@ -1,17 +1,17 @@
 {
 	"organization": {
-		"name": "Independent Living Partners",
-		"abbreviation": "ilp"
+		"name": "radianHub",
+		"abbreviation": "rh"
 	},
 	"project": {
-		"name": "Implementation",
-		"abbreviation": "impl"
+		"name": "rHelay",
+		"abbreviation": "rhelay"
 	},
 	"stages": {
 		"production": {
 			"branch": "main",
-			"next": "release",
-			"previous": "uat"
+			"next": null,
+			"previous": "release"
 		},
 		"uat": {
 			"branch": "uat",
