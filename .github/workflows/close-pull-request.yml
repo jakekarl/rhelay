@@ -37,10 +37,12 @@ jobs:
           PROMOTION_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
-          # Extract the current target branch from the promotion branch name
-          # promotion__source__target -> target
+          # Extract the source and target from the promotion branch name
+          # promotion__source__target -> source and target
+          SOURCE_BRANCH=$(echo "$PROMOTION_BRANCH" | awk -F'__' '{print $2}')
           CURRENT_TARGET=$(echo "$PROMOTION_BRANCH" | awk -F'__' '{print $3}')
           
+          echo "Source branch: $SOURCE_BRANCH"
           echo "Current target branch: $CURRENT_TARGET"
           echo "Base branch (merged into): $TARGET_BRANCH"
           
@@ -64,8 +66,8 @@ jobs:
           
           echo "Next branch: $NEXT_BRANCH"
           
-          # Create new promotion branch name
-          NEW_PROMOTION_BRANCH="promotion__${TARGET_BRANCH}__${NEXT_BRANCH}"
+          # Create new promotion branch name using the original source
+          NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
           echo "Creating new promotion branch: $NEW_PROMOTION_BRANCH"
           
           # Configure git
@@ -73,21 +75,21 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # Fetch latest changes
-          git fetch origin "$TARGET_BRANCH"
+          git fetch origin "$SOURCE_BRANCH"
           git fetch origin "$NEXT_BRANCH" || true
           
-          # Check if there are commits between next stage and current target
-          COMMITS_AHEAD=$(git rev-list --count "origin/$NEXT_BRANCH..origin/$TARGET_BRANCH" 2>/dev/null || echo "0")
+          # Check if there are commits between next stage and source
+          COMMITS_AHEAD=$(git rev-list --count "origin/$NEXT_BRANCH..origin/$SOURCE_BRANCH" 2>/dev/null || echo "0")
           
           if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
-            echo "No commits to promote from $TARGET_BRANCH to $NEXT_BRANCH. Skipping promotion creation."
+            echo "No commits to promote from $SOURCE_BRANCH to $NEXT_BRANCH. Skipping promotion creation."
             exit 0
           fi
           
           echo "Found $COMMITS_AHEAD commits to promote"
           
-          # Create promotion branch from target branch
-          git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$TARGET_BRANCH"
+          # Create promotion branch from source branch
+          git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$SOURCE_BRANCH"
           
           # Push the new promotion branch
           git push origin "$NEW_PROMOTION_BRANCH"
@@ -101,6 +103,9 @@ jobs:
           PROMOTION_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
+          # Extract source from promotion branch
+          SOURCE_BRANCH=$(echo "$PROMOTION_BRANCH" | awk -F'__' '{print $2}')
+          
           # Extract target and find next stage
           NEXT_STAGE=$(jq -r --arg branch "$TARGET_BRANCH" '.stages | to_entries[] | select(.value.branch == $branch) | .value.next' rh/pipeline.json)
           
@@ -110,18 +115,18 @@ jobs:
           fi
           
           NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
-          NEW_PROMOTION_BRANCH="promotion__${TARGET_BRANCH}__${NEXT_BRANCH}"
+          NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
           
           # Create PR using GitHub CLI
           gh pr create \
             --base "$NEXT_BRANCH" \
             --head "$NEW_PROMOTION_BRANCH" \
-            --title "[Promote] $TARGET_BRANCH → $NEXT_BRANCH" \
-            --body "Automated promotion from \`$TARGET_BRANCH\` to \`$NEXT_BRANCH\`
+            --title "[Promote] $SOURCE_BRANCH → $NEXT_BRANCH" \
+            --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$NEXT_BRANCH\`
 
           This PR was automatically created after merging the previous promotion.
 
-          **Source Branch:** \`$TARGET_BRANCH\`
+          **Source Branch:** \`$SOURCE_BRANCH\`
           **Target Branch:** \`$NEXT_BRANCH\`
           **Promotion Branch:** \`$NEW_PROMOTION_BRANCH\`" || {
             echo "Note: PR may already exist or could not be created"
