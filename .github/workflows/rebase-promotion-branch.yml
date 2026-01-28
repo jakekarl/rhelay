@@ -4,6 +4,10 @@ on:
     push:
         branches:
             - '**' # Trigger on all branches
+            - '!promotion__*'
+            - '!main'
+            - '!uat'
+            - '!release__*'
 
 permissions:
     contents: write
