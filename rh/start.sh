@@ -81,11 +81,14 @@ npm ci
 echo_wrapper "Discord Changes"
 git restore .
 
-echo_wrapper "Checkout main Branch"
-git checkout main
+# Read production branch from pipeline.json
+PROD_BRANCH=$(cat rh/pipeline.json | grep -A 2 '"production"' | grep '"branch"' | sed 's/.*"branch": "\(.*\)".*/\1/')
+
+echo_wrapper "Checkout $PROD_BRANCH Branch"
+git checkout "$PROD_BRANCH"
 
 echo_wrapper "Pull Latest Changes"
-git pull origin main
+git pull origin "$PROD_BRANCH"
 
 echo_wrapper "Checkout New Branch for Ticket"
 if git show-ref --verify --quiet "refs/heads/$TICKET_NUMBER"; then
@@ -94,7 +97,10 @@ else
     git checkout -b "$TICKET_NUMBER"
 fi
 
-project="ilp-triptrak"
+# Read organization and project abbreviations from pipeline.json
+ORG_ABBR=$(cat rh/pipeline.json | grep -A 1 '"organization"' | grep '"abbreviation"' | head -1 | sed 's/.*"abbreviation": "\(.*\)".*/\1/')
+PROJECT_ABBR=$(cat rh/pipeline.json | grep -A 1 '"project"' | grep '"abbreviation"' | sed 's/.*"abbreviation": "\(.*\)".*/\1/')
+project="$ORG_ABBR-$PROJECT_ABBR"
 branch=$(git branch | sed -n -e 's/^\* \(.*\)/\1/p')
 scratchOrgName="$project-$branch"
 if [[ $DO_SCRATCH -eq 1 ]]; then
