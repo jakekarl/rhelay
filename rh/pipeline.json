@@ -11,11 +11,11 @@
 		"production": {
 			"branch": "main",
 			"next": null,
-			"previous": "release"
+			"previous": "uat"
 		},
 		"uat": {
 			"branch": "uat",
-			"next": "release",
+			"next": "production",
 			"previous": null
 		}
 	}
