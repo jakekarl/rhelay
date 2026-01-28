@@ -98,8 +98,8 @@ else
 fi
 
 # Read organization and project abbreviations from pipeline.json
-ORG_ABBR=$(cat rh/pipeline.json | grep -A 1 '"organization"' | grep '"abbreviation"' | head -1 | sed 's/.*"abbreviation": "\(.*\)".*/\1/')
-PROJECT_ABBR=$(cat rh/pipeline.json | grep -A 1 '"project"' | grep '"abbreviation"' | sed 's/.*"abbreviation": "\(.*\)".*/\1/')
+ORG_ABBR=$(jq -r '.organization.abbreviation' rh/pipeline.json)
+PROJECT_ABBR=$(jq -r '.project.abbreviation' rh/pipeline.json)
 project="$ORG_ABBR-$PROJECT_ABBR"
 branch=$(git branch | sed -n -e 's/^\* \(.*\)/\1/p')
 scratchOrgName="$project-$branch"
