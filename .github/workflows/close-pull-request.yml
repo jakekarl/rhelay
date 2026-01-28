@@ -122,7 +122,7 @@ jobs:
           gh pr create \
             --base "$NEXT_BRANCH" \
             --head "$NEW_PROMOTION_BRANCH" \
-            --title "[Promote] $SOURCE_BRANCH → $NEXT_BRANCH" \
+            --title "[rHelay] $SOURCE_BRANCH → $NEXT_BRANCH" \
             --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$NEXT_BRANCH\`
 
           This PR was automatically created after merging the previous promotion.

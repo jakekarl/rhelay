@@ -144,7 +144,7 @@ if command -v gh >/dev/null 2>&1; then
   gh pr create \
     --base "$TARGET_BRANCH" \
     --head "$PROMOTION_BRANCH" \
-    --title "[Promote] $SOURCE_BRANCH → $TARGET_BRANCH" \
+    --title "[rHelay] $SOURCE_BRANCH → $TARGET_BRANCH" \
     --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$TARGET_BRANCH\`
 
 This PR contains changes to promote to the initial pipeline stage.
