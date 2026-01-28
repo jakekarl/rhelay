@@ -125,20 +125,11 @@ if [[ $DO_SCRATCH -eq 1 ]]; then
         fi
     fi
 
-    echo_wrapper "Create Fresh Scratch Org & Install WFD Package" 
+    echo_wrapper "Create Fresh Scratch Org" 
     sf org create scratch -f ./config/project-scratch-def.json -a "$scratchOrgName" --name "$scratchOrgName" -y 30 -w 60 -d
 
     echo_wrapper "Deploy Package Metadata"
     sf project deploy start -d force-app -o "$scratchOrgName" --ignore-conflicts
-
-    echo_wrapper "Assign Permission Sets to Admin User" 
-    sf apex run -f ./scripts/apex/AssignAdminPermissionSet.apex
-
-    echo_wrapper "Insert TripTrak Custom Setting"
-    sf apex run -f ./scripts/apex/CustomSetting.apex
-
-    echo_wrapper "Import Test Data"
-    npm run data:import
 
     echo_wrapper "Reset Project Tracking"
     sf project reset tracking -p

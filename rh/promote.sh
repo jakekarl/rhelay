@@ -5,50 +5,50 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  pull-request.sh [source_branch] <target_branch>
+  promote.sh [source_branch]
 
 Arguments:
   source_branch     Source GitHub branch to promote from (defaults to current branch)
-  target_branch     Target GitHub branch to promote to
 
 Description:
-  This script automates creating a promotion pull request by:
-    1. Checking out the source branch and pulling latest.
-    2. Creating or updating a promotion branch named promotion__<source>__<target>.
-    3. If there are no commits between origin/<target> and <source>, the script
+  This script automates creating a promotion pull request to the initial stage by:
+    1. Reading the target branch from pipeline.json (stage where previous = null)
+    2. Checking out the source branch and pulling latest.
+    3. Creating or updating a promotion branch named promotion__<source>__<target>.
+    4. If there are no commits between origin/<target> and <source>, the script
        will clean up any promotion branch it created locally and exit.
-    4. Otherwise it (optionally) generates a manifest, pushes the promotion
-       branch to origin, and creates a PR using the GitHub CLI (gh) if present.
-
-Notes:
-  - If the promotion branch already exists on the remote, it will be rebased
-    onto the current source branch and left intact even if no new commits are found.
-  - The manifest generation step is currently commented out.
+    5. Otherwise it pushes the promotion branch to origin and creates a PR 
+       using the GitHub CLI (gh) if present.
 
 Examples:
-  ./pull-request.sh feature/my-feature main
-  ./pull-request.sh main uat
-  ./pull-request.sh main                    # Uses current branch as source
+  ./promote.sh feature/my-feature
+  ./promote.sh release
+  ./promote.sh                    # Uses current branch as source
 USAGE
 }
 
 # ---- Parse & validate args ----
-if [[ $# -eq 1 ]]; then
-  # Only target branch provided, use current branch as source
+if [[ $# -eq 0 ]]; then
+  # Use current branch as source
   SOURCE_BRANCH=$(git branch --show-current)
-  TARGET_BRANCH="$1"
-elif [[ $# -eq 2 ]]; then
-  # Both source and target branches provided
+elif [[ $# -eq 1 ]]; then
   SOURCE_BRANCH="$1"
-  TARGET_BRANCH="$2"
 else
   usage
   exit 1
 fi
 
-# ---- Validate branches ----
-if [[ -z "$SOURCE_BRANCH" || -z "$TARGET_BRANCH" ]]; then
-  echo "Error: Could not determine source and target branches."
+# ---- Read target branch from pipeline.json ----
+TARGET_BRANCH=$(jq -r '.stages | to_entries[] | select(.value.previous == null) | .value.branch' rh/pipeline.json)
+
+if [[ -z "$TARGET_BRANCH" ]]; then
+  echo "Error: Could not determine target branch from pipeline.json"
+  exit 2
+fi
+
+# ---- Validate source branch ----
+if [[ -z "$SOURCE_BRANCH" ]]; then
+  echo "Error: Could not determine source branch."
   usage
   exit 2
 fi
@@ -134,28 +134,12 @@ if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
   exit 0
 fi
 
-# ---- Step 4: Run generate-manifest.sh ----
-# echo -e "${GREEN}Step 4: Generating manifest with generate-manifest.sh...${NC}"
-# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# source "$SCRIPT_DIR/generate-manifest.sh" \
-#   --base "origin/$TARGET_BRANCH" \
-#   --head "$SOURCE_BRANCH" \
-#   --api "$API_VERSION" \
-#   --verbose
-
-# # ---- Step 5: Push promotional branch ----
-echo -e "${GREEN}Step 5: Pushing promotional branch...${NC}"
+# ---- Step 4: Push promotional branch ----
+echo -e "${GREEN}Step 4: Pushing promotional branch...${NC}"
 git push origin "$PROMOTION_BRANCH"
-# if git diff --quiet && git diff --cached --quiet; then
-#   echo "  No manifest changes to commit."
-# else
-#   git add manifest/
-#   git commit -m "Generate manifest for promotion from $SOURCE_BRANCH to $TARGET_BRANCH"
-# fi
-# git push origin "$PROMOTION_BRANCH"
 
-# ---- Step 6: Create pull request ----
-echo -e "${GREEN}Step 6: Creating pull request...${NC}"
+# ---- Step 5: Create pull request ----
+echo -e "${GREEN}Step 5: Creating pull request...${NC}"
 if command -v gh >/dev/null 2>&1; then
   gh pr create \
     --base "$TARGET_BRANCH" \
@@ -163,8 +147,7 @@ if command -v gh >/dev/null 2>&1; then
     --title "[Promote] $SOURCE_BRANCH → $TARGET_BRANCH" \
     --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$TARGET_BRANCH\`
 
-This PR contains:
-- Manifest generated for changes between \`$TARGET_BRANCH\` and \`$SOURCE_BRANCH\`
+This PR contains changes to promote to the initial pipeline stage.
 - API Version: $API_VERSION
 
 **Source Branch:** \`$SOURCE_BRANCH\`
@@ -180,9 +163,9 @@ else
   echo "   Branch has been pushed and is ready for PR creation."
 fi
 
-# ---- Step 7: Return to source branch ----
+# ---- Step 6: Return to source branch ----
 echo ""
-echo -e "${GREEN}Step 7: Returning to source branch '$SOURCE_BRANCH'...${NC}"
+echo -e "${GREEN}Step 6: Returning to source branch '$SOURCE_BRANCH'...${NC}"
 git checkout "$SOURCE_BRANCH"
 
 echo ""

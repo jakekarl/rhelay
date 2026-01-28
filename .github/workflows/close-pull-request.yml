@@ -1,0 +1,30 @@
+name: Delete Promotion Branch on PR Close
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  delete-promotion-branch:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'promotion__')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete promotion branch
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Deleting promotional branch: $BRANCH_NAME"
+          git push origin --delete "$BRANCH_NAME" || {
+            echo "Warning: Could not delete branch $BRANCH_NAME. It may have already been deleted."
+            exit 0
+          }
+
+      - name: Confirm deletion
+        run: |
+          echo "✅ Promotional branch ${{ github.head_ref }} has been deleted"
