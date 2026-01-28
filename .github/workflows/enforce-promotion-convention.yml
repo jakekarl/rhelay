@@ -78,37 +78,37 @@ jobs:
             --title "[rHelay] $SOURCE_BRANCH → $TARGET_BRANCH" \
             --body "Automated promotion branch created by rHelay.
 
-# This PR follows the promotion branch naming convention.
+            This PR follows the promotion branch naming convention.
 
-# **Source Branch:** \`$SOURCE_BRANCH\`
-# **Target Branch:** \`$TARGET_BRANCH\`
-# **Promotion Branch:** \`$PROMOTION_BRANCH\`"
+            **Source Branch:** \`$SOURCE_BRANCH\`
+            **Target Branch:** \`$TARGET_BRANCH\`
+            **Promotion Branch:** \`$PROMOTION_BRANCH\`"
+                      
+          echo "New PR created for promotion branch"
+      
+      - name: Close original PR with comment
+        if: steps.check_convention.outputs.is_promotion == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: |
+          PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${TARGET_BRANCH}"
           
-#           echo "New PR created for promotion branch"
+          # Add comment explaining the closure
+          gh pr comment "$PR_NUMBER" \
+            --body "🤖 **Automatically closed by rHelay**
 
-#       - name: Close original PR with comment
-#         if: steps.check_convention.outputs.is_promotion == 'false'
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#           PR_NUMBER: ${{ github.event.pull_request.number }}
-#           SOURCE_BRANCH: ${{ github.head_ref }}
-#           TARGET_BRANCH: ${{ github.base_ref }}
-#         run: |
-#           PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${TARGET_BRANCH}"
+            This PR was opened directly from a feature branch instead of a promotion branch. rHelay has automatically:
+            1. Created a new promotion branch: \`$PROMOTION_BRANCH\`
+            2. Created a new PR from the promotion branch to \`$TARGET_BRANCH\`
+
+            Please use the new PR instead. The promotion branch naming convention ensures proper pipeline flow.
+
+            **New Promotion Branch:** \`$PROMOTION_BRANCH\`"
           
-#           # Add comment explaining the closure
-#           gh pr comment "$PR_NUMBER" \
-#             --body "🤖 **Automatically closed by rHelay**
-
-# This PR was opened directly from a feature branch instead of a promotion branch. rHelay has automatically:
-# 1. Created a new promotion branch: \`$PROMOTION_BRANCH\`
-# 2. Created a new PR from the promotion branch to \`$TARGET_BRANCH\`
-
-# Please use the new PR instead. The promotion branch naming convention ensures proper pipeline flow.
-
-# **New Promotion Branch:** \`$PROMOTION_BRANCH\`"
+          # Close the PR
+          gh pr close "$PR_NUMBER"
           
-#           # Close the PR
-#           gh pr close "$PR_NUMBER"
-          
-#           echo "Original PR closed with comment"
+          echo "Original PR closed with comment"
