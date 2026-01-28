@@ -1,0 +1,22 @@
+{
+	"organization": {
+		"name": "Independent Living Partners",
+		"abbreviation": "ilp"
+	},
+	"project": {
+		"name": "Implementation",
+		"abbreviation": "impl"
+	},
+	"stages": {
+		"production": {
+			"branch": "main",
+			"next": "release",
+			"previous": "uat"
+		},
+		"uat": {
+			"branch": "uat",
+			"next": "release",
+			"previous": null
+		}
+	}
+}
