@@ -10,7 +10,7 @@ permissions:
 jobs:
   delete-promotion-branch:
     runs-on: ubuntu-latest
-    if: startsWith(github.head_ref, 'promotion__')
+    if: startsWith(github.head_ref, 'promotion__') && github.event.pull_request.merged == true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,3 +31,101 @@ jobs:
       - name: Confirm deletion
         run: |
           echo "✅ Promotional branch ${{ github.head_ref }} has been deleted"
+
+      - name: Create next stage promotion
+        env:
+          PROMOTION_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: |
+          # Extract the current target branch from the promotion branch name
+          # promotion__source__target -> target
+          CURRENT_TARGET=$(echo "$PROMOTION_BRANCH" | awk -F'__' '{print $3}')
+          
+          echo "Current target branch: $CURRENT_TARGET"
+          echo "Base branch (merged into): $TARGET_BRANCH"
+          
+          # Find the next stage from pipeline.json
+          NEXT_STAGE=$(jq -r --arg branch "$TARGET_BRANCH" '.stages | to_entries[] | select(.value.branch == $branch) | .value.next' rh/pipeline.json)
+          
+          if [[ -z "$NEXT_STAGE" || "$NEXT_STAGE" == "null" ]]; then
+            echo "No next stage found for branch $TARGET_BRANCH. This is the final stage."
+            exit 0
+          fi
+          
+          echo "Next stage: $NEXT_STAGE"
+          
+          # Get the branch name for the next stage
+          NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
+          
+          if [[ -z "$NEXT_BRANCH" || "$NEXT_BRANCH" == "null" ]]; then
+            echo "Could not find branch for next stage $NEXT_STAGE"
+            exit 1
+          fi
+          
+          echo "Next branch: $NEXT_BRANCH"
+          
+          # Create new promotion branch name
+          NEW_PROMOTION_BRANCH="promotion__${TARGET_BRANCH}__${NEXT_BRANCH}"
+          echo "Creating new promotion branch: $NEW_PROMOTION_BRANCH"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch latest changes
+          git fetch origin "$TARGET_BRANCH"
+          git fetch origin "$NEXT_BRANCH" || true
+          
+          # Check if there are commits between next stage and current target
+          COMMITS_AHEAD=$(git rev-list --count "origin/$NEXT_BRANCH..origin/$TARGET_BRANCH" 2>/dev/null || echo "0")
+          
+          if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
+            echo "No commits to promote from $TARGET_BRANCH to $NEXT_BRANCH. Skipping promotion creation."
+            exit 0
+          fi
+          
+          echo "Found $COMMITS_AHEAD commits to promote"
+          
+          # Create promotion branch from target branch
+          git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$TARGET_BRANCH"
+          
+          # Push the new promotion branch
+          git push origin "$NEW_PROMOTION_BRANCH"
+          
+          echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
+
+      - name: Create PR for next stage
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMOTION_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: |
+          # Extract target and find next stage
+          NEXT_STAGE=$(jq -r --arg branch "$TARGET_BRANCH" '.stages | to_entries[] | select(.value.branch == $branch) | .value.next' rh/pipeline.json)
+          
+          if [[ -z "$NEXT_STAGE" || "$NEXT_STAGE" == "null" ]]; then
+            echo "No PR to create - this is the final stage"
+            exit 0
+          fi
+          
+          NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
+          NEW_PROMOTION_BRANCH="promotion__${TARGET_BRANCH}__${NEXT_BRANCH}"
+          
+          # Create PR using GitHub CLI
+          gh pr create \
+            --base "$NEXT_BRANCH" \
+            --head "$NEW_PROMOTION_BRANCH" \
+            --title "[Promote] $TARGET_BRANCH → $NEXT_BRANCH" \
+            --body "Automated promotion from \`$TARGET_BRANCH\` to \`$NEXT_BRANCH\`
+
+          This PR was automatically created after merging the previous promotion.
+
+          **Source Branch:** \`$TARGET_BRANCH\`
+          **Target Branch:** \`$NEXT_BRANCH\`
+          **Promotion Branch:** \`$NEW_PROMOTION_BRANCH\`" || {
+            echo "Note: PR may already exist or could not be created"
+            exit 0
+          }
+          
+          echo "✅ Created PR for $NEW_PROMOTION_BRANCH → $NEXT_BRANCH"
