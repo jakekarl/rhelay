@@ -125,7 +125,7 @@ if [[ $DO_SCRATCH -eq 1 ]]; then
         fi
     fi
 
-    echo_wrapper "Create Fresh Scratch Org & Install WFD Package" 
+    echo_wrapper "Create Fresh Scratch Org" 
     sf org create scratch -f ./config/project-scratch-def.json -a "$scratchOrgName" --name "$scratchOrgName" -y 30 -w 60 -d
 
     echo_wrapper "Deploy Package Metadata"
