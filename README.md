@@ -20,3 +20,4 @@ The `sfdx-project.json` file contains useful configuration information for your 
 ## feature/002 comments
 ## feature/003 comments
 ## feature/004 comments
+## feature/006 comments
