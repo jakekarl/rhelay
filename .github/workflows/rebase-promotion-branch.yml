@@ -1,0 +1,71 @@
+name: Rebase Promotion Branch
+
+on:
+    push:
+        branches:
+            - '**' # Trigger on all branches
+
+permissions:
+    contents: write
+
+jobs:
+    rebase-promotion:
+        runs-on: ubuntu-latest
+        # Skip if the branch itself is a promotion branch
+        if: ${{ !startsWith(github.ref, 'refs/heads/promotion__') }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # Fetch all history for all branches
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Find and rebase promotion branches
+              run: |
+                  CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+                  echo "Current branch: $CURRENT_BRANCH"
+
+                  # Find all promotion branches that match the pattern promotion__<current-branch>__*
+                  PROMOTION_BRANCHES=$(git branch -r | grep "origin/promotion__${CURRENT_BRANCH}__" | sed 's/origin\///' | xargs)
+
+                  if [ -z "$PROMOTION_BRANCHES" ]; then
+                    echo "No promotion branches found for $CURRENT_BRANCH"
+                    exit 0
+                  fi
+
+                  echo "Found promotion branches: $PROMOTION_BRANCHES"
+
+                  # Rebase each promotion branch
+                  for PROMO_BRANCH in $PROMOTION_BRANCHES; do
+                    echo "Processing promotion branch: $PROMO_BRANCH"
+                    
+                    # Checkout the promotion branch
+                    git checkout "$PROMO_BRANCH"
+                    
+                    # Attempt to rebase onto the current branch
+                    if git rebase "origin/$CURRENT_BRANCH"; then
+                      echo "Successfully rebased $PROMO_BRANCH onto $CURRENT_BRANCH"
+                      
+                      # Force push the rebased branch
+                      git push origin "$PROMO_BRANCH" --force-with-lease
+                      echo "Pushed rebased $PROMO_BRANCH"
+                    else
+                      echo "::warning::Rebase conflict detected for $PROMO_BRANCH. Manual intervention required."
+                      # Abort the rebase on conflict
+                      git rebase --abort
+                      
+                      # Create an issue or comment about the conflict (optional)
+                      echo "::error::Failed to automatically rebase $PROMO_BRANCH due to conflicts"
+                    fi
+                  done
+
+            - name: Return to original branch
+              if: always()
+              run: |
+                  CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+                  git checkout "$CURRENT_BRANCH" || true
