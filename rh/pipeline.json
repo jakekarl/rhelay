@@ -26,6 +26,12 @@
       "branch": "release__A",
       "next": "production",
       "tickets": []
+    },
+    "release__B": {
+      "default": false,
+      "branch": "release__B",
+      "next": "production",
+      "tickets": []
     }
   }
 }
