@@ -40,6 +40,9 @@ else
   exit 1
 fi
 
+# Save original branch to return later
+ORIGINAL_BRANCH=$(git branch --show-current)
+
 # ---- Validate branches ----
 if [[ -z "$SOURCE_BRANCH" || -z "$TARGET_BRANCH" ]]; then
   echo "Error: Could not determine source and target branches."
@@ -148,3 +151,6 @@ echo ""
 echo "✅ Promotion process completed!"
 echo "   Promotion branch: $PROMOTION_BRANCH"
 echo "   Ready to merge into: $TARGET_BRANCH"
+
+echo "Returning to original branch: $ORIGINAL_BRANCH"
+git checkout "$ORIGINAL_BRANCH"
