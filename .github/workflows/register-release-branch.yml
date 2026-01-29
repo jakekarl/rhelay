@@ -1,7 +1,9 @@
 name: Register Release Branch
 
 on:
-  create:
+  push:
+    branches:
+      - 'release__**'
 
 permissions:
   contents: write
@@ -9,26 +11,32 @@ permissions:
 jobs:
   register-release:
     runs-on: ubuntu-latest
-    if: github.ref_type == 'branch' && startsWith(github.ref_name, 'release__')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
 
       - name: Extract release name
         id: extract_name
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "Release branch created: $BRANCH_NAME"
+          echo "Release branch: $BRANCH_NAME"
 
       - name: Update pipeline.json
         env:
           BRANCH_NAME: ${{ steps.extract_name.outputs.branch_name }}
         run: |
           echo "Adding release $BRANCH_NAME to pipeline.json"
+          
+          # Check if this release is already registered
+          ALREADY_EXISTS=$(jq -r --arg branch "$BRANCH_NAME" '.releases[$branch] // empty' rh/pipeline.json)
+          
+          if [[ -n "$ALREADY_EXISTS" ]]; then
+            echo "Release $BRANCH_NAME is already registered in pipeline.json"
+            exit 0
+          fi
           
           # Check if there's already a default release
           EXISTING_DEFAULT=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
