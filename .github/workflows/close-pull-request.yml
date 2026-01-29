@@ -33,6 +33,16 @@ jobs:
         run: |
           echo "✅ Promotional branch ${{ github.head_ref }} has been deleted"
 
+  create-next-promotion:
+    runs-on: ubuntu-latest
+    needs: delete-promotion-branch
+    if: startsWith(github.head_ref, 'promotion__') && github.event.pull_request.merged == true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create next stage promotion
         env:
           PROMOTION_BRANCH: ${{ github.head_ref }}
@@ -156,8 +166,17 @@ jobs:
             echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
           fi
 
+  create-next-pr:
+    runs-on: ubuntu-latest
+    needs: create-next-promotion
+    if: startsWith(github.head_ref, 'promotion__') && github.event.pull_request.merged == true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create PR for next stage
-        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PROMOTION_BRANCH: ${{ github.head_ref }}
