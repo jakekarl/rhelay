@@ -262,6 +262,15 @@ jobs:
           PROMOTION_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
+          # Fetch latest changes to get updated pipeline.json
+          git fetch origin
+          
+          # Get production branch and pull latest pipeline.json
+          PROD_BRANCH=$(git show HEAD:rh/pipeline.json | jq -r '.stages | to_entries[] | select(.value.next == null) | .value.branch')
+          git fetch origin "$PROD_BRANCH"
+          git checkout "$PROD_BRANCH"
+          git pull origin "$PROD_BRANCH"
+          
           # Extract source from promotion branch
           SOURCE_BRANCH=$(echo "$PROMOTION_BRANCH" | awk -F'__' '{print $2}')
           
