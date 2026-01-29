@@ -5,18 +5,20 @@
 	},
 	"project": {
 		"name": "rHelay",
-		"abbreviation": "rhelay"
+		"abbreviation": "rhelay",
+		"type": "isv"
 	},
 	"stages": {
 		"production": {
 			"branch": "main",
 			"next": null,
-			"previous": "uat"
+			"previous": "release"
 		},
 		"uat": {
 			"branch": "uat",
-			"next": "production",
+			"next": "release",
 			"previous": null
 		}
-	}
+	},
+	"releases": {}
 }

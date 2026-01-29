@@ -1,0 +1,105 @@
+name: Register Release Branch
+
+on:
+  push:
+    branches:
+      - 'release__**'
+
+permissions:
+  contents: write
+
+jobs:
+  register-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release name
+        id: extract_name
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "Release branch: $BRANCH_NAME"
+
+      - name: Update pipeline.json
+        env:
+          BRANCH_NAME: ${{ steps.extract_name.outputs.branch_name }}
+        run: |
+          echo "Adding release $BRANCH_NAME to pipeline.json"
+          
+          # Check if this release is already registered
+          ALREADY_EXISTS=$(jq -r --arg branch "$BRANCH_NAME" '.releases[$branch] // empty' rh/pipeline.json)
+          
+          if [[ -n "$ALREADY_EXISTS" ]]; then
+            echo "Release $BRANCH_NAME is already registered in pipeline.json"
+            exit 0
+          fi
+          
+          # Check if there's already a default release
+          EXISTING_DEFAULT=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
+          
+          if [[ -n "$EXISTING_DEFAULT" ]]; then
+            echo "Existing default release found: $EXISTING_DEFAULT"
+            echo "Setting new release as default: false"
+            DEFAULT_VALUE="false"
+          else
+            echo "No existing default release found"
+            echo "Setting new release as default: true"
+            DEFAULT_VALUE="true"
+          fi
+          
+          # Create temporary JSON with the new release entry
+          jq --arg branch "$BRANCH_NAME" \
+             --argjson default "$DEFAULT_VALUE" \
+             '.releases[$branch] = {
+               "default": $default,
+               "branch": $branch,
+               "next": "production",
+               "tickets": []
+             }' rh/pipeline.json > rh/pipeline.json.tmp
+          
+          mv rh/pipeline.json.tmp rh/pipeline.json
+          
+          echo "Updated pipeline.json with new release: $BRANCH_NAME"
+          
+          # Display the changes
+          echo "New releases section:"
+          jq '.releases' rh/pipeline.json
+
+      - name: Commit and push changes
+        env:
+          BRANCH_NAME: ${{ steps.extract_name.outputs.branch_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Get production branch from pipeline.json
+          PRODUCTION_BRANCH=$(jq -r '.stages | to_entries[] | select(.value.next == null) | .value.branch' rh/pipeline.json)
+          
+          echo "Production branch: $PRODUCTION_BRANCH"
+          
+          # Checkout production branch
+          git fetch origin "$PRODUCTION_BRANCH"
+          git checkout "$PRODUCTION_BRANCH"
+          
+          # Fetch the release branch to get updated pipeline.json
+          git fetch origin "$BRANCH_NAME"
+          
+          # Get the updated pipeline.json from the release branch
+          git show "origin/$BRANCH_NAME:rh/pipeline.json" > rh/pipeline.json
+          
+          git add rh/pipeline.json
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "Register release branch: $BRANCH_NAME"
+          git push origin "$PRODUCTION_BRANCH"
+          
+          echo "✅ Release branch $BRANCH_NAME registered in pipeline.json on $PRODUCTION_BRANCH"
