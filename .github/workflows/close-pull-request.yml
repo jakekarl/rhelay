@@ -1,4 +1,4 @@
-name: Delete Promotion Branch on PR Close
+name: Close Pull Request
 
 on:
   pull_request:
@@ -119,14 +119,43 @@ jobs:
               
               echo "✅ Created new release branch: $RELEASE_BRANCH"
               
-              # The register-release-branch workflow will update pipeline.json
-              # Wait a moment for it to complete
-              sleep 5
+              # Add release to pipeline.json on production branch
+              echo "Adding $RELEASE_BRANCH to pipeline.json..."
               
-              # Fetch the updated pipeline.json from main
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              
+              # Checkout production branch
               git fetch origin "$PROD_BRANCH"
               git checkout "$PROD_BRANCH"
               git pull origin "$PROD_BRANCH"
+              
+              # Check if there's already a default release
+              EXISTING_DEFAULT=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
+              
+              if [[ -n "$EXISTING_DEFAULT" ]]; then
+                DEFAULT_VALUE="false"
+              else
+                DEFAULT_VALUE="true"
+              fi
+              
+              # Add release to pipeline.json
+              jq --arg branch "$RELEASE_BRANCH" \
+                 --argjson default "$DEFAULT_VALUE" \
+                 '.releases[$branch] = {
+                   "default": $default,
+                   "branch": $branch,
+                   "next": "production",
+                   "tickets": []
+                 }' rh/pipeline.json > rh/pipeline.json.tmp
+              
+              mv rh/pipeline.json.tmp rh/pipeline.json
+              
+              git add rh/pipeline.json
+              git commit -m "Register release branch: $RELEASE_BRANCH"
+              git push origin "$PROD_BRANCH"
+              
+              echo "✅ Added $RELEASE_BRANCH to pipeline.json on $PROD_BRANCH"
               
               DEFAULT_RELEASE="release__${NEXT_LETTER}"
             fi
