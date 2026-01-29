@@ -28,6 +28,12 @@ jobs:
         env:
           BRANCH_NAME: ${{ steps.extract_name.outputs.branch_name }}
         run: |
+          # Checkout production branch before updating pipeline.json
+          PRODUCTION_BRANCH=$(jq -r '.stages | to_entries[] | select(.value.next == null) | .value.branch' rh/pipeline.json)
+          git fetch origin "$PRODUCTION_BRANCH"
+          git checkout "$PRODUCTION_BRANCH"
+          git pull --ff-only origin "$PRODUCTION_BRANCH"
+
           echo "Adding release $BRANCH_NAME to pipeline.json"
           
           # Check if this release is already registered
@@ -78,18 +84,6 @@ jobs:
           
           # Get production branch from pipeline.json
           PRODUCTION_BRANCH=$(jq -r '.stages | to_entries[] | select(.value.next == null) | .value.branch' rh/pipeline.json)
-          
-          echo "Production branch: $PRODUCTION_BRANCH"
-          
-          # Checkout production branch
-          git fetch origin "$PRODUCTION_BRANCH"
-          git checkout "$PRODUCTION_BRANCH"
-          
-          # Fetch the release branch to get updated pipeline.json
-          git fetch origin "$BRANCH_NAME"
-          
-          # Get the updated pipeline.json from the release branch
-          git show "origin/$BRANCH_NAME:rh/pipeline.json" > rh/pipeline.json
           
           git add rh/pipeline.json
           
