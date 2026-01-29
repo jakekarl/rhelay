@@ -3,7 +3,7 @@ name: Register Release Branch
 on:
   push:
     branches:
-      - 'release__**'
+      - 'release/**'
 
 permissions:
   contents: write

@@ -81,14 +81,14 @@ jobs:
               git fetch origin --prune
               
               # Find existing release branches
-              REMOTE_RELEASES=$(git ls-remote --heads origin 'refs/heads/release__*' 2>/dev/null | awk '{print $2}' | sed 's#refs/heads/##' | grep -E '^release__[A-Za-z]$' || true)
+              REMOTE_RELEASES=$(git ls-remote --heads origin 'refs/heads/release/*' 2>/dev/null | awk '{print $2}' | sed 's#refs/heads/##' | grep -E '^release/[A-Za-z]$' || true)
               
               MAX_ORD=0
               while IFS= read -r rb; do
                 if [[ -z "$rb" ]]; then
                   continue
                 fi
-                letter=$(echo "$rb" | sed -E 's/^release__([A-Za-z])$/\1/')
+                letter=$(echo "$rb" | sed -E 's/^release\/([A-Za-z])$/\1/')
                 letter=$(echo "$letter" | tr '[:lower:]' '[:upper:]')
                 ord=$(printf '%d' "'${letter}")
                 if [[ $ord -gt $MAX_ORD ]]; then
@@ -106,7 +106,7 @@ jobs:
                 NEXT_LETTER=$(printf "\\$(printf '%03o' $((MAX_ORD + 1)))")
               fi
               
-              RELEASE_BRANCH="release__${NEXT_LETTER}"
+              RELEASE_BRANCH="release/${NEXT_LETTER}"
               echo "Creating new release branch: $RELEASE_BRANCH"
               
               # Get production branch
@@ -157,7 +157,7 @@ jobs:
               
               echo "✅ Added $RELEASE_BRANCH to pipeline.json on $PROD_BRANCH"
               
-              DEFAULT_RELEASE="release__${NEXT_LETTER}"
+              DEFAULT_RELEASE="release/${NEXT_LETTER}"
             fi
             
             echo "Found default release: $DEFAULT_RELEASE"
@@ -193,17 +193,6 @@ jobs:
             git push origin "$NEW_PROMOTION_BRANCH"
             
             echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
-            
-            # Now create promotion from release to production
-            PROD_BRANCH=$(jq -r '.stages.production.branch' rh/pipeline.json)
-            RELEASE_TO_PROD_BRANCH="promotion__${RELEASE_BRANCH}__${PROD_BRANCH}"
-            
-            echo "Creating release to production promotion: $RELEASE_TO_PROD_BRANCH"
-            
-            git checkout -b "$RELEASE_TO_PROD_BRANCH" "origin/$RELEASE_BRANCH" || git checkout "$RELEASE_TO_PROD_BRANCH"
-            git push origin "$RELEASE_TO_PROD_BRANCH"
-            
-            echo "✅ Created release to production promotion branch: $RELEASE_TO_PROD_BRANCH"
           else
             # Get the branch name for the next stage
             NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
@@ -315,26 +304,24 @@ jobs:
             
             echo "✅ Created PR for $NEW_PROMOTION_BRANCH → $RELEASE_BRANCH"
             
-            # Create PR from release to production
+            # Create direct PR from release to production (no promotional branch)
             PROD_BRANCH=$(jq -r '.stages.production.branch' rh/pipeline.json)
-            RELEASE_TO_PROD_BRANCH="promotion__${RELEASE_BRANCH}__${PROD_BRANCH}"
             
             gh pr create \
               --base "$PROD_BRANCH" \
-              --head "$RELEASE_TO_PROD_BRANCH" \
+              --head "$RELEASE_BRANCH" \
               --title "[rHelay] $RELEASE_BRANCH → $PROD_BRANCH" \
-              --body "Automated promotion from \`$RELEASE_BRANCH\` to \`$PROD_BRANCH\`
+              --body "Release promotion to production
 
-            This PR promotes the release branch to production.
+            This PR promotes the release branch directly to production.
 
             **Source Branch:** \`$RELEASE_BRANCH\`
-            **Target Branch:** \`$PROD_BRANCH\`
-            **Promotion Branch:** \`$RELEASE_TO_PROD_BRANCH\`" || {
+            **Target Branch:** \`$PROD_BRANCH\`" || {
               echo "Note: PR may already exist or could not be created"
               exit 0
             }
             
-            echo "✅ Created PR for $RELEASE_TO_PROD_BRANCH → $PROD_BRANCH"
+            echo "✅ Created PR for $RELEASE_BRANCH → $PROD_BRANCH"
           else
             NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
             NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
