@@ -1,24 +1,31 @@
 {
-	"organization": {
-		"name": "radianHub",
-		"abbreviation": "rh"
-	},
-	"project": {
-		"name": "rHelay",
-		"abbreviation": "rhelay",
-		"type": "isv"
-	},
-	"stages": {
-		"production": {
-			"branch": "main",
-			"next": null,
-			"previous": "release"
-		},
-		"uat": {
-			"branch": "uat",
-			"next": "release",
-			"previous": null
-		}
-	},
-	"releases": {}
+  "organization": {
+    "name": "radianHub",
+    "abbreviation": "rh"
+  },
+  "project": {
+    "name": "rHelay",
+    "abbreviation": "rhelay",
+    "type": "isv"
+  },
+  "stages": {
+    "production": {
+      "branch": "main",
+      "next": null,
+      "previous": "release"
+    },
+    "uat": {
+      "branch": "uat",
+      "next": "release",
+      "previous": null
+    }
+  },
+  "releases": {
+    "release__A": {
+      "default": true,
+      "branch": "release__A",
+      "next": "production",
+      "tickets": []
+    }
+  }
 }
