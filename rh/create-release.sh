@@ -29,6 +29,10 @@ fi
 
 echo "Preparing to create next release branch..."
 
+# Save original branch
+ORIGINAL_BRANCH=$(git branch --show-current)
+echo "Original branch: $ORIGINAL_BRANCH"
+
 echo "Fetching latest refs..."
 git fetch origin --prune
 
@@ -101,6 +105,8 @@ if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
     git checkout -b "$BRANCH" "origin/$BRANCH"
   fi
   echo "Done."
+  echo "Returning to original branch: $ORIGINAL_BRANCH"
+  git checkout "$ORIGINAL_BRANCH"
   exit 0
 fi
 
@@ -108,6 +114,8 @@ fi
 if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "Local branch '$BRANCH' already exists. Checking it out."
   git checkout "$BRANCH"
+  echo "Returning to original branch: $ORIGINAL_BRANCH"
+  git checkout "$ORIGINAL_BRANCH"
   exit 0
 fi
 
@@ -118,6 +126,9 @@ echo "Pushing '$BRANCH' to origin and setting upstream..."
 git push -u origin "$BRANCH"
 
 echo "Branch created and pushed: $BRANCH"
+
+echo "Returning to original branch: $ORIGINAL_BRANCH"
+git checkout "$ORIGINAL_BRANCH"
 
 exit 0
 
