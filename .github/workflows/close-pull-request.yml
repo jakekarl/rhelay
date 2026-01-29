@@ -57,45 +57,104 @@ jobs:
           
           echo "Next stage: $NEXT_STAGE"
           
-          # Get the branch name for the next stage
-          NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
-          
-          if [[ -z "$NEXT_BRANCH" || "$NEXT_BRANCH" == "null" ]]; then
-            echo "Could not find branch for next stage $NEXT_STAGE"
-            exit 1
+          # Check if next stage is "release"
+          if [[ "$NEXT_STAGE" == "release" ]]; then
+            echo "Next stage is release. Looking for default release..."
+            
+            # Find default release
+            DEFAULT_RELEASE=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
+            
+            if [[ -z "$DEFAULT_RELEASE" || "$DEFAULT_RELEASE" == "null" ]]; then
+              echo "No default release found. Need to create a new release branch."
+              echo "Release creation will be handled by the create-release workflow or manual action."
+              exit 0
+            fi
+            
+            echo "Found default release: $DEFAULT_RELEASE"
+            RELEASE_BRANCH=$(jq -r --arg key "$DEFAULT_RELEASE" '.releases[$key].branch' rh/pipeline.json)
+            echo "Release branch: $RELEASE_BRANCH"
+            
+            # Create promotion branch to release
+            NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${RELEASE_BRANCH}"
+            echo "Creating promotion branch: $NEW_PROMOTION_BRANCH"
+            
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Fetch latest changes
+            git fetch origin "$SOURCE_BRANCH"
+            git fetch origin "$RELEASE_BRANCH" || true
+            
+            # Check if there are commits between release and source
+            COMMITS_AHEAD=$(git rev-list --count "origin/$RELEASE_BRANCH..origin/$SOURCE_BRANCH" 2>/dev/null || echo "0")
+            
+            if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
+              echo "No commits to promote from $SOURCE_BRANCH to $RELEASE_BRANCH. Skipping promotion creation."
+              exit 0
+            fi
+            
+            echo "Found $COMMITS_AHEAD commits to promote"
+            
+            # Create promotion branch from source branch
+            git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$SOURCE_BRANCH"
+            
+            # Push the new promotion branch
+            git push origin "$NEW_PROMOTION_BRANCH"
+            
+            echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
+            
+            # Now create promotion from release to production
+            PROD_BRANCH=$(jq -r '.stages.production.branch' rh/pipeline.json)
+            RELEASE_TO_PROD_BRANCH="promotion__${RELEASE_BRANCH}__${PROD_BRANCH}"
+            
+            echo "Creating release to production promotion: $RELEASE_TO_PROD_BRANCH"
+            
+            git checkout -b "$RELEASE_TO_PROD_BRANCH" "origin/$RELEASE_BRANCH" || git checkout "$RELEASE_TO_PROD_BRANCH"
+            git push origin "$RELEASE_TO_PROD_BRANCH"
+            
+            echo "✅ Created release to production promotion branch: $RELEASE_TO_PROD_BRANCH"
+          else
+            # Get the branch name for the next stage
+            NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
+            
+            if [[ -z "$NEXT_BRANCH" || "$NEXT_BRANCH" == "null" ]]; then
+              echo "Could not find branch for next stage $NEXT_STAGE"
+              exit 1
+            fi
+            
+            echo "Next branch: $NEXT_BRANCH"
+            
+            # Create new promotion branch name using the original source
+            NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
+            echo "Creating new promotion branch: $NEW_PROMOTION_BRANCH"
+            
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Fetch latest changes
+            git fetch origin "$SOURCE_BRANCH"
+            git fetch origin "$NEXT_BRANCH" || true
+            
+            # Check if there are commits between next stage and source
+            COMMITS_AHEAD=$(git rev-list --count "origin/$NEXT_BRANCH..origin/$SOURCE_BRANCH" 2>/dev/null || echo "0")
+            
+            if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
+              echo "No commits to promote from $SOURCE_BRANCH to $NEXT_BRANCH. Skipping promotion creation."
+              exit 0
+            fi
+            
+            echo "Found $COMMITS_AHEAD commits to promote"
+            
+            # Create promotion branch from source branch
+            git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$SOURCE_BRANCH"
+            
+            # Push the new promotion branch
+            git push origin "$NEW_PROMOTION_BRANCH"
+            
+            echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
           fi
-          
-          echo "Next branch: $NEXT_BRANCH"
-          
-          # Create new promotion branch name using the original source
-          NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
-          echo "Creating new promotion branch: $NEW_PROMOTION_BRANCH"
-          
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Fetch latest changes
-          git fetch origin "$SOURCE_BRANCH"
-          git fetch origin "$NEXT_BRANCH" || true
-          
-          # Check if there are commits between next stage and source
-          COMMITS_AHEAD=$(git rev-list --count "origin/$NEXT_BRANCH..origin/$SOURCE_BRANCH" 2>/dev/null || echo "0")
-          
-          if [[ "$COMMITS_AHEAD" -eq 0 ]]; then
-            echo "No commits to promote from $SOURCE_BRANCH to $NEXT_BRANCH. Skipping promotion creation."
-            exit 0
-          fi
-          
-          echo "Found $COMMITS_AHEAD commits to promote"
-          
-          # Create promotion branch from source branch
-          git checkout -b "$NEW_PROMOTION_BRANCH" "origin/$SOURCE_BRANCH"
-          
-          # Push the new promotion branch
-          git push origin "$NEW_PROMOTION_BRANCH"
-          
-          echo "✅ Created promotion branch: $NEW_PROMOTION_BRANCH"
 
       - name: Create PR for next stage
         if: success()
@@ -115,23 +174,78 @@ jobs:
             exit 0
           fi
           
-          NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
-          NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
-          
-          # Create PR using GitHub CLI
-          gh pr create \
-            --base "$NEXT_BRANCH" \
-            --head "$NEW_PROMOTION_BRANCH" \
-            --title "[rHelay] $SOURCE_BRANCH → $NEXT_BRANCH" \
-            --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$NEXT_BRANCH\`
+          # Check if next stage is "release"
+          if [[ "$NEXT_STAGE" == "release" ]]; then
+            echo "Next stage is release. Creating PR to default release."
+            
+            # Find default release
+            DEFAULT_RELEASE=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
+            
+            if [[ -z "$DEFAULT_RELEASE" || "$DEFAULT_RELEASE" == "null" ]]; then
+              echo "No default release found. Skipping PR creation."
+              exit 0
+            fi
+            
+            RELEASE_BRANCH=$(jq -r --arg key "$DEFAULT_RELEASE" '.releases[$key].branch' rh/pipeline.json)
+            NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${RELEASE_BRANCH}"
+            
+            # Create PR to release
+            gh pr create \
+              --base "$RELEASE_BRANCH" \
+              --head "$NEW_PROMOTION_BRANCH" \
+              --title "[rHelay] $SOURCE_BRANCH → $RELEASE_BRANCH" \
+              --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$RELEASE_BRANCH\`
 
-          This PR was automatically created after merging the previous promotion.
+            This PR was automatically created after merging the previous promotion.
 
-          **Source Branch:** \`$SOURCE_BRANCH\`
-          **Target Branch:** \`$NEXT_BRANCH\`
-          **Promotion Branch:** \`$NEW_PROMOTION_BRANCH\`" || {
-            echo "Note: PR may already exist or could not be created"
-            exit 0
-          }
-          
-          echo "✅ Created PR for $NEW_PROMOTION_BRANCH → $NEXT_BRANCH"
+            **Source Branch:** \`$SOURCE_BRANCH\`
+            **Target Branch:** \`$RELEASE_BRANCH\`
+            **Promotion Branch:** \`$NEW_PROMOTION_BRANCH\`" || {
+              echo "Note: PR may already exist or could not be created"
+              exit 0
+            }
+            
+            echo "✅ Created PR for $NEW_PROMOTION_BRANCH → $RELEASE_BRANCH"
+            
+            # Create PR from release to production
+            PROD_BRANCH=$(jq -r '.stages.production.branch' rh/pipeline.json)
+            RELEASE_TO_PROD_BRANCH="promotion__${RELEASE_BRANCH}__${PROD_BRANCH}"
+            
+            gh pr create \
+              --base "$PROD_BRANCH" \
+              --head "$RELEASE_TO_PROD_BRANCH" \
+              --title "[rHelay] $RELEASE_BRANCH → $PROD_BRANCH" \
+              --body "Automated promotion from \`$RELEASE_BRANCH\` to \`$PROD_BRANCH\`
+
+            This PR promotes the release branch to production.
+
+            **Source Branch:** \`$RELEASE_BRANCH\`
+            **Target Branch:** \`$PROD_BRANCH\`
+            **Promotion Branch:** \`$RELEASE_TO_PROD_BRANCH\`" || {
+              echo "Note: PR may already exist or could not be created"
+              exit 0
+            }
+            
+            echo "✅ Created PR for $RELEASE_TO_PROD_BRANCH → $PROD_BRANCH"
+          else
+            NEXT_BRANCH=$(jq -r --arg stage "$NEXT_STAGE" '.stages[$stage].branch' rh/pipeline.json)
+            NEW_PROMOTION_BRANCH="promotion__${SOURCE_BRANCH}__${NEXT_BRANCH}"
+            
+            # Create PR using GitHub CLI
+            gh pr create \
+              --base "$NEXT_BRANCH" \
+              --head "$NEW_PROMOTION_BRANCH" \
+              --title "[rHelay] $SOURCE_BRANCH → $NEXT_BRANCH" \
+              --body "Automated promotion from \`$SOURCE_BRANCH\` to \`$NEXT_BRANCH\`
+
+            This PR was automatically created after merging the previous promotion.
+
+            **Source Branch:** \`$SOURCE_BRANCH\`
+            **Target Branch:** \`$NEXT_BRANCH\`
+            **Promotion Branch:** \`$NEW_PROMOTION_BRANCH\`" || {
+              echo "Note: PR may already exist or could not be created"
+              exit 0
+            }
+            
+            echo "✅ Created PR for $NEW_PROMOTION_BRANCH → $NEXT_BRANCH"
+          fi
