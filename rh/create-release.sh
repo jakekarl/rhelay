@@ -3,7 +3,7 @@ set -euo pipefail
 
 # create-release.sh
 # Usage: create-release.sh
-# This script creates the next release branch in the series: release__A, release__B, ...
+# This script creates the next release branch in the series: release/A, release/B, ...
 
 usage() {
   cat <<'USAGE'
@@ -12,12 +12,12 @@ Usage:
 
 Description:
   Determines the next letter in the release series (A..Z) based on existing
-  branches named `release__<LETTER>` (local or remote) and creates a new
-  branch named `release__<NEXT>` from `main`, then pushes it and sets upstream.
+  branches named `release/<LETTER>` (local or remote) and creates a new
+  branch named `release/<NEXT>` from `main`, then pushes it and sets upstream.
 
 Notes:
-  - First release will be `release__A` when no existing release branches are found.
-  - The script will error if it would need to create past `release__Z`.
+  - First release will be `release/A` when no existing release branches are found.
+  - The script will error if it would need to create past `release/Z`.
 USAGE
 }
 
@@ -39,17 +39,17 @@ git fetch origin --prune
 # Determine next release letter (A..Z)
 echo "Detecting existing release branches..."
 # Gather local release branches (single-letter) and remote release branches
-LOCAL_RELEASES=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^release__[A-Za-z]$' || true)
-REMOTE_RELEASES=$(git ls-remote --heads origin 'refs/heads/release__*' 2>/dev/null | awk '{print $2}' | sed 's#refs/heads/##' | grep -E '^release__[A-Za-z]$' || true)
+LOCAL_RELEASES=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^release/[A-Za-z]$' || true)
+REMOTE_RELEASES=$(git ls-remote --heads origin 'refs/heads/release/*' 2>/dev/null | awk '{print $2}' | sed 's#refs/heads/##' | grep -E '^release/[A-Za-z]$' || true)
 
-ALL_RELEASES=$(printf "%s\n%s\n" "$LOCAL_RELEASES" "$REMOTE_RELEASES" | grep -E '^release__[A-Za-z]$' || true)
+ALL_RELEASES=$(printf "%s\n%s\n" "$LOCAL_RELEASES" "$REMOTE_RELEASES" | grep -E '^release/[A-Za-z]$' || true)
 
 MAX_ORD=0
 while IFS= read -r rb; do
   if [[ -z "$rb" ]]; then
     continue
   fi
-  letter=$(echo "$rb" | sed -E 's/^release__([A-Za-z])$/\1/')
+  letter=$(echo "$rb" | sed -E 's/^release\/([A-Za-z])$/\1/')
   # uppercase
   letter=$(echo "$letter" | tr '[:lower:]' '[:upper:]')
   ord=$(printf '%d' "'${letter}")
@@ -68,7 +68,7 @@ else
   NEXT_LETTER=$(printf "\\$(printf '%03o' $((MAX_ORD + 1)))")
 fi
 
-BRANCH="release__${NEXT_LETTER}"
+BRANCH="release/${NEXT_LETTER}"
 
 echo "Next release branch will be: $BRANCH"
 
