@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# create-version-stage.sh
-# Usage: create-version-stage.sh
+# create-release.sh
+# Usage: create-release.sh
 # This script creates the next release branch in the series: release-A, release-B, ...
 
 usage() {
   cat <<'USAGE'
 Usage:
-  create-version-stage.sh
+  create-release.sh
 
 Description:
   Determines the next letter in the release series (A..Z) based on existing
