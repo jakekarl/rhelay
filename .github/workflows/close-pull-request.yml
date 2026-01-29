@@ -75,9 +75,60 @@ jobs:
             DEFAULT_RELEASE=$(jq -r '.releases | to_entries[] | select(.value.default == true) | .key' rh/pipeline.json)
             
             if [[ -z "$DEFAULT_RELEASE" || "$DEFAULT_RELEASE" == "null" ]]; then
-              echo "No default release found. Need to create a new release branch."
-              echo "Release creation will be handled by the create-release workflow or manual action."
-              exit 0
+              echo "No default release found. Creating a new release branch..."
+              
+              # Fetch all branches to check existing releases
+              git fetch origin --prune
+              
+              # Find existing release branches
+              REMOTE_RELEASES=$(git ls-remote --heads origin 'refs/heads/release__*' 2>/dev/null | awk '{print $2}' | sed 's#refs/heads/##' | grep -E '^release__[A-Za-z]$' || true)
+              
+              MAX_ORD=0
+              while IFS= read -r rb; do
+                if [[ -z "$rb" ]]; then
+                  continue
+                fi
+                letter=$(echo "$rb" | sed -E 's/^release__([A-Za-z])$/\1/')
+                letter=$(echo "$letter" | tr '[:lower:]' '[:upper:]')
+                ord=$(printf '%d' "'${letter}")
+                if [[ $ord -gt $MAX_ORD ]]; then
+                  MAX_ORD=$ord
+                fi
+              done <<< "$REMOTE_RELEASES"
+              
+              if [[ $MAX_ORD -eq 0 ]]; then
+                NEXT_LETTER='A'
+              else
+                if [[ $MAX_ORD -ge 90 ]]; then
+                  echo "Error: existing release branches reached 'Z'. Cannot create next release letter." >&2
+                  exit 1
+                fi
+                NEXT_LETTER=$(printf "\\$(printf '%03o' $((MAX_ORD + 1)))")
+              fi
+              
+              RELEASE_BRANCH="release__${NEXT_LETTER}"
+              echo "Creating new release branch: $RELEASE_BRANCH"
+              
+              # Get production branch
+              PROD_BRANCH=$(jq -r '.stages.production.branch' rh/pipeline.json)
+              
+              # Create release branch from production
+              git fetch origin "$PROD_BRANCH"
+              git checkout -b "$RELEASE_BRANCH" "origin/$PROD_BRANCH"
+              git push origin "$RELEASE_BRANCH"
+              
+              echo "✅ Created new release branch: $RELEASE_BRANCH"
+              
+              # The register-release-branch workflow will update pipeline.json
+              # Wait a moment for it to complete
+              sleep 5
+              
+              # Fetch the updated pipeline.json from main
+              git fetch origin "$PROD_BRANCH"
+              git checkout "$PROD_BRANCH"
+              git pull origin "$PROD_BRANCH"
+              
+              DEFAULT_RELEASE="release__${NEXT_LETTER}"
             fi
             
             echo "Found default release: $DEFAULT_RELEASE"
