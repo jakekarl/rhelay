@@ -34,7 +34,7 @@
       "tickets": []
     },
     "release/A": {
-      "default": true,
+      "default": false,
       "branch": "release/A",
       "next": "production",
       "tickets": []
