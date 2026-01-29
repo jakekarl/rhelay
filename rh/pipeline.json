@@ -22,7 +22,7 @@
   },
   "releases": {
     "release__A": {
-      "default": true,
+      "default": false,
       "branch": "release__A",
       "next": "production",
       "tickets": []
