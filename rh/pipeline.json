@@ -21,23 +21,5 @@
     }
   },
   "releases": {
-    "release__A": {
-      "default": false,
-      "branch": "release__A",
-      "next": "production",
-      "tickets": []
-    },
-    "release__B": {
-      "default": false,
-      "branch": "release__B",
-      "next": "production",
-      "tickets": []
-    },
-    "release/A": {
-      "default": false,
-      "branch": "release/A",
-      "next": "production",
-      "tickets": []
-    }
   }
 }
