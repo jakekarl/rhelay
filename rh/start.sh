@@ -7,20 +7,20 @@ set -euo pipefail
 usage() {
         cat <<'USAGE'
 Usage:
-    start.sh <ticket_number> [create_scratch]
+    start.sh <ticket_number> <create_scratch>
 
 Arguments:
     ticket_number   Ticket or branch name to create/checkout (required)
-    create_scratch  yes|no (optional, default: yes) - whether to create a scratch org and deploy
+    create_scratch  yes|no (required) - whether to create a scratch org and deploy
 
 Description:
     Sets up a development scratch org and deploys metadata. When the
-    second argument is 'no' (or falsey), all scratch org creation and
-    deployment steps are skipped and the script only prepares the
-    local branch and environment.
+    second argument is 'no', all scratch org creation and deployment
+    steps are skipped and the script only prepares the local branch
+    and environment.
 
 Examples:
-    ./start.sh JIRA-123
+    ./start.sh JIRA-123 yes
     ./start.sh JIRA-123 no
 USAGE
 }
@@ -58,15 +58,14 @@ function echo_wrapper() {
     LAST_ARG=$1
 }
 
-if [[ $# -lt 1 ]]; then
-    echo -e "${RED}Error: No ticket number entered."
+if [[ $# -lt 2 ]]; then
+    echo -e "${RED}Error: Missing required arguments."
     usage
     exit 1
 fi
 
 TICKET_NUMBER="$1"
-# Optional second argument: whether to create a scratch org (yes/no). Defaults to yes.
-CREATE_SCRATCH_ARG="${2:-yes}"
+CREATE_SCRATCH_ARG="$2"
 CREATE_SCRATCH=$(echo "$CREATE_SCRATCH_ARG" | tr '[:upper:]' '[:lower:]')
 if [[ "$CREATE_SCRATCH" =~ ^(y|yes|true|1)$ ]]; then
     DO_SCRATCH=1
